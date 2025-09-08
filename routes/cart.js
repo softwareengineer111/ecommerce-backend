@@ -12,13 +12,19 @@ const mongoose = require('mongoose');
 router.get('/', auth, async (req, res) => {
   try {
     let cart = await Cart.findOne({ user: req.user.id }).populate(
-      'items.product',
-      'name price images stock'
+      'items.product'
     );
 
     if (!cart) {
-      // If no cart exists for the user, create an empty one.
       cart = await Cart.create({ user: req.user.id, items: [] });
+    }
+
+    const originalItemCount = cart.items.length;
+    // null product-г filter хийх (устсан бараа гэх мэт)
+    cart.items = cart.items.filter((item) => item.product !== null);
+
+    if (cart.items.length < originalItemCount) {
+      await cart.save();
     }
 
     res.json(cart);
@@ -75,98 +81,6 @@ router.post('/', auth, async (req, res) => {
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
-  }
-});
-
-// @route   POST api/cart/checkout
-// @desc    Create an order from the cart (checkout)
-// @access  Private
-router.post('/checkout', auth, async (req, res) => {
-  const { address } = req.body;
-  if (!address) {
-    return res.status(400).json({ msg: 'Address is required' });
-  }
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const userId = req.user.id;
-
-    // 1. Find user's cart
-    const cart = await Cart.findOne({ user: userId }).session(session);
-    if (!cart || cart.items.length === 0) {
-      await session.abortTransaction();
-      session.endSession();
-      return res
-        .status(400)
-        .json({ msg: 'Cannot create order from an empty cart' });
-    }
-
-    // 2. Process items and check stock
-    let total = 0;
-    const processedItems = [];
-    const productUpdates = [];
-
-    for (const item of cart.items) {
-      const product = await Product.findById(item.product).session(session);
-      if (!product) {
-        await session.abortTransaction();
-        session.endSession();
-        return res
-          .status(404)
-          .json({ msg: `Product not found: ${item.product}` });
-      }
-      if (product.stock < item.quantity) {
-        await session.abortTransaction();
-        session.endSession();
-        return res
-          .status(400)
-          .json({ msg: `Not enough stock for ${product.name}` });
-      }
-
-      const price = product.price;
-      total += price * item.quantity;
-      processedItems.push({ product: product._id, qty: item.quantity, price });
-
-      productUpdates.push({
-        updateOne: {
-          filter: { _id: product._id },
-          update: { $inc: { stock: -item.quantity } },
-        },
-      });
-    }
-
-    // 3. Create the order
-    const order = new Order({
-      user: userId,
-      items: processedItems,
-      total,
-      address,
-    });
-    await order.save({ session });
-
-    // 4. Update product stock in bulk
-    await Product.bulkWrite(productUpdates, { session });
-
-    // 5. Clear the cart
-    cart.items = [];
-    await cart.save({ session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    // 6. Populate and return the new order
-    const populatedOrder = await Order.findById(order._id).populate(
-      'items.product',
-      'name images'
-    );
-    res.status(201).json(populatedOrder);
-  } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
-    console.error(err.message);
-    res.status(500).send('Server error');
   }
 });
 
