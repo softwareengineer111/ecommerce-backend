@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
@@ -18,7 +17,14 @@ router.post('/register', async (req, res) => {
     user.password = await bcrypt.hash(password, salt);
     await user.save();
 
-    const payload = { user: { id: user.id } };
+    const payload = {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
     const secret = process.env.JWT_SECRET || 'change_this_secret';
     jwt.sign(payload, secret, { expiresIn: '7d' }, (err, token) => {
       if (err) throw err;
@@ -40,7 +46,14 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
 
-    const payload = { user: { id: user.id } };
+    const payload = {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
     const secret = process.env.JWT_SECRET || 'change_this_secret';
     jwt.sign(payload, secret, { expiresIn: '7d' }, (err, token) => {
       if (err) throw err;
