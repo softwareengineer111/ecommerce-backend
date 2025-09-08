@@ -41,14 +41,19 @@ router.get('/:id', [auth, admin], async (req, res) => {
 // @desc    Create a user (by admin)
 // @access  Private/Admin
 router.post('/', [auth, admin], async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, shop } = req.body;
   try {
     let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ msg: 'User already exists' });
     }
 
-    user = new User({ name, email, password, role });
+    const newUser = { name, email, password, role };
+    if (role === 'shopmanager') {
+      newUser.shop = shop;
+    }
+
+    user = new User(newUser);
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
@@ -60,6 +65,9 @@ router.post('/', [auth, admin], async (req, res) => {
 
     res.status(201).json(userToReturn);
   } catch (err) {
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ msg: err.message });
+    }
     console.error(err.message);
     res.status(500).send('Server Error');
   }
@@ -69,12 +77,18 @@ router.post('/', [auth, admin], async (req, res) => {
 // @desc    Update a user
 // @access  Private/Admin
 router.put('/:id', [auth, admin], async (req, res) => {
-  const { name, email, role } = req.body;
+  const { name, email, role, shop } = req.body;
 
   const userFields = {};
-  if (name) userFields.name = name;
-  if (email) userFields.email = email;
-  if (role) userFields.role = role;
+  if (name !== undefined) userFields.name = name;
+  if (email !== undefined) userFields.email = email;
+  if (role !== undefined) userFields.role = role;
+  if (shop) {
+    // Using dot notation to update nested fields
+    if (shop.name !== undefined) userFields['shop.name'] = shop.name;
+    if (shop.location !== undefined)
+      userFields['shop.location'] = shop.location;
+  }
 
   try {
     let user = await User.findById(req.params.id);
@@ -90,11 +104,14 @@ router.put('/:id', [auth, admin], async (req, res) => {
     user = await User.findByIdAndUpdate(
       req.params.id,
       { $set: userFields },
-      { new: true }
+      { new: true, runValidators: true, context: 'query' }
     ).select('-password');
 
     res.json(user);
   } catch (err) {
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ msg: err.message });
+    }
     console.error(err.message);
     res.status(500).send('Server Error');
   }

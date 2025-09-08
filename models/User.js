@@ -10,6 +10,15 @@ const UserSchema = new mongoose.Schema(
       enum: ['user', 'admin', 'shopmanager', 'superadmin'],
       default: 'user',
     },
+    shop: {
+      name: {
+        type: String,
+        required: function () {
+          return this.role === 'shopmanager';
+        },
+      },
+      location: String,
+    },
   },
   { timestamps: true }
 );
