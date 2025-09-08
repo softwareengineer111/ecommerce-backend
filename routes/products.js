@@ -8,15 +8,33 @@ const streamifier = require('streamifier');
 
 // Get all products
 router.get('/', async (req, res) => {
-  const products = await Product.find().sort({ createdAt: -1 });
-  res.json(products);
+  try {
+    const products = await Product.find()
+      .populate('category', 'name')
+      .sort({ createdAt: -1 });
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
 });
 
 // Get single product
 router.get('/:id', async (req, res) => {
-  const product = await Product.findById(req.params.id);
-  if (!product) return res.status(404).json({ msg: 'Product not found' });
-  res.json(product);
+  try {
+    const product = await Product.findById(req.params.id).populate(
+      'category',
+      'name'
+    );
+    if (!product) return res.status(404).json({ msg: 'Product not found' });
+    res.json(product);
+  } catch (err) {
+    console.error(err);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Product not found' });
+    }
+    res.status(500).send('Server error');
+  }
 });
 
 // Helper function to upload a file buffer to Cloudinary
@@ -122,7 +140,7 @@ router.delete('/:id', auth, async (req, res) => {
     }
 
     await Product.findByIdAndDelete(req.params.id);
-    res.json({ msg: 'Deleted' });
+    res.json({ msg: 'Product deleted' });
   } catch (err) {
     res.status(400).json({ msg: 'Delete failed' });
   }

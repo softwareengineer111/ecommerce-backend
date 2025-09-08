@@ -12,7 +12,10 @@ const ProductSchema = new mongoose.Schema(
         url: { type: String, required: true },
       },
     ],
-    category: String,
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category',
+    },
   },
   { timestamps: true }
 );
